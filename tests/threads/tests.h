@@ -15,6 +15,7 @@ extern test_func test_priority_change;
 extern test_func test_priority_fifo;
 extern test_func test_priority_preempt;
 extern test_func test_priority_sema;
+extern test_func test_prod_cons;
 
 void msg (const char *, ...);
 void fail (const char *, ...);

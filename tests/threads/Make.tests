@@ -17,4 +17,4 @@ tests/threads_SRC += tests/threads/priority-change.c
 tests/threads_SRC += tests/threads/priority-fifo.c
 tests/threads_SRC += tests/threads/priority-preempt.c
 tests/threads_SRC += tests/threads/priority-sema.c
-
+tests/threads_SRC += tests/threads/prod-cons.c

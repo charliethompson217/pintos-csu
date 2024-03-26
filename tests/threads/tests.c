@@ -21,6 +21,7 @@ static const struct test tests[] =
     {"priority-fifo", test_priority_fifo},
     {"priority-preempt", test_priority_preempt},
     {"priority-sema", test_priority_sema},
+    {"prod-cons", test_prod_cons},
   };
 
 static const char *test_name;
