@@ -28,6 +28,8 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+static struct list sleeping_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -92,6 +94,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&sleeping_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -209,6 +212,10 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  /* prempt running thread*/
+  if(t->priority > thread_current()->priority)
+    thread_yield();
+  
   return tid;
 }
 
@@ -245,8 +252,46 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THD_BLOCKED);
-  list_ins_back (&ready_list, &t->elem);
+  list_insert_ordered (&ready_list, &t->elem, thread_priority_comparator, NULL);
   t->status = THD_READY;
+  intr_set_level (old_level);
+}
+
+/* Returns true if the wake up time of thread a is less than that of thread b otherwise it returns false. */
+bool wakeup_time_comparator(struct list_elem *a, struct list_elem *b, void* aux){
+  struct thread *x = list_entry(a, struct thread, elem);
+  struct thread *y = list_entry(b, struct thread, elem);
+  if(x->wake_up_time < y->wake_up_time)
+    return true;
+  else
+    return false;
+}
+
+/* Puts the current thread to sleep untill the specified time in ticks. */
+void thread_sleep(int64_t wake_up_time){
+  enum intr_level old_level = intr_disable ();
+  struct thread *cur = thread_current();
+  cur->wake_up_time = wake_up_time;
+  cur->status = THD_SLEEP;
+  list_insert_ordered (&sleeping_list, &cur->elem, wakeup_time_comparator, NULL);
+  schedule();
+  intr_set_level (old_level);
+}
+
+/*Wakes up any threads whose wake up time is less than or equal to current time in ticks. */
+void thread_wake_up(void){
+  enum intr_level old_level = intr_disable ();
+  while(!list_empty (&sleeping_list)){
+    struct thread *cur = list_entry(list_front(&sleeping_list), struct thread, elem);
+    if(cur->wake_up_time <= timer_ticks()){
+      list_rem_front(&sleeping_list);
+      list_insert_ordered (&ready_list, &cur->elem, thread_priority_comparator, NULL);
+      cur->status = THD_READY;
+      if(thread_current()->priority < cur->priority)
+        intr_yield_on_return();
+    }
+    else break;
+  }
   intr_set_level (old_level);
 }
 
@@ -316,7 +361,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_ins_back (&ready_list, &cur->elem);
+    list_insert_ordered (&ready_list, &cur->elem, thread_priority_comparator, NULL);
   cur->status = THD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -343,7 +388,22 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  enum intr_level old_level = intr_disable ();
+
+  struct thread *current = thread_current ();
+  int old_priority = current->priority;
+  current->priority = new_priority;
+
+  if (!list_empty(&ready_list) && old_priority > new_priority) {
+    struct list_elem *first_elem = list_front(&ready_list);
+    struct thread *first_thread = list_entry(first_elem, struct thread, elem);
+    if (first_thread->priority > new_priority){
+      intr_set_level (old_level);
+      thread_yield ();
+      return;
+    }
+  }
+  intr_set_level (old_level);
 }
 
 /* Returns the current thread's priority. */
@@ -351,6 +411,16 @@ int
 thread_get_priority (void) 
 {
   return thread_current ()->priority;
+}
+
+/* Returns true if thread a has higher priority otherwise it returns false */
+bool thread_priority_comparator(struct list_elem *a, struct list_elem *b, void* aux){
+  struct thread *x = list_entry(a, struct thread, elem);
+  struct thread *y = list_entry(b, struct thread, elem);
+  if(x->priority > y->priority)
+    return true;
+  else
+    return false;
 }
 
 /* Sets the current thread's nice value to NICE. */

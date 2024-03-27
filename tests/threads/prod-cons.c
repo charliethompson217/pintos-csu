@@ -53,7 +53,9 @@ void test_prod_cons(void) {
    sema_init(&full, 0);
    sema_init(&empty, BUFSIZE);
 
-   thread_create("producer", PR_DEFAULT, producer, NULL);
-   thread_create("consumer", PR_DEFAULT, consumer, NULL);
+   thread_create("producer", PR_DEFAULT+1, producer, NULL);
+   thread_create("consumer", PR_DEFAULT-1, consumer, NULL);
+   
+   thread_exit();
 }
 
